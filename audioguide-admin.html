@@ -738,7 +738,7 @@ img { display: block; max-width: 100%; }
               Удалить
             </button>
             <button class="btn btn-ghost" style="margin-left:auto" onclick="closePanel()">Отмена</button>
-            <button class="btn btn-primary" id="save-btn" onclick="document.getElementById('point-form').requestSubmit()">
+            <button class="btn btn-primary" id="save-btn" onclick="savePoint()">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
               <span id="save-btn-text">Сохранить</span>
             </button>
@@ -894,7 +894,7 @@ img { display: block; max-width: 100%; }
     <div class="modal-footer">
       <button class="btn btn-danger" id="r-delete-btn" style="display:none" onclick="deleteRoute()">Удалить</button>
       <button class="btn btn-ghost" onclick="closeRouteModal()">Отмена</button>
-      <button class="btn btn-primary" onclick="document.getElementById('route-form').requestSubmit()">
+      <button class="btn btn-primary" onclick="saveRoute()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><polyline points="20 6 9 17 4 12"/></svg>
         Сохранить
       </button>
@@ -1216,9 +1216,9 @@ function openEditPointPanel(pt) {
   document.getElementById('pt-lat').value = pt.lat;
   document.getElementById('pt-lon').value = pt.lon;
   document.getElementById('pt-trigger-radius').value = pt.trigger_radius_m ?? 50;
+  clearPhoto(); clearAudio();
   document.getElementById('pt-image-url').value = pt.image_url || '';
   document.getElementById('pt-audio-url').value = pt.audio_url || '';
-  clearPhoto(); clearAudio();
 
   if (pt.image_url) {
     document.getElementById('photo-img').src = pt.image_url;
@@ -1242,10 +1242,10 @@ function closePanel() {
 }
 
 // ─── PHOTO / AUDIO HANDLERS ───
-function handlePhotoSelect(input) {
+async function handlePhotoSelect(input) {
   const file = input.files[0];
   if (!file) return;
-  state.pendingPhotoFile = file;
+  // preview
   const reader = new FileReader();
   reader.onload = e => {
     document.getElementById('photo-img').src = e.target.result;
@@ -1253,6 +1253,22 @@ function handlePhotoSelect(input) {
     document.getElementById('photo-preview').classList.add('visible');
   };
   reader.readAsDataURL(file);
+  // upload immediately
+  state.photoUploading = true;
+  const prog = document.getElementById('photo-progress');
+  const bar = document.getElementById('photo-bar');
+  prog.classList.add('visible'); bar.style.width = '0%';
+  try {
+    const res = await uploadMedia(file, pct => bar.style.width = pct + '%');
+    document.getElementById('pt-image-url').value = res.url;
+    toast('Фото загружено', 'success');
+  } catch(err) {
+    document.getElementById('pt-image-url').value = '';
+    toast('Ошибка загрузки фото: ' + err.message, 'error');
+  } finally {
+    state.photoUploading = false;
+    prog.classList.remove('visible'); bar.style.width = '0%';
+  }
 }
 
 function clearPhoto() {
@@ -1263,13 +1279,29 @@ function clearPhoto() {
   document.getElementById('pt-image-url').value = '';
 }
 
-function handleAudioSelect(input) {
+async function handleAudioSelect(input) {
   const file = input.files[0];
   if (!file) return;
-  state.pendingAudioFile = file;
   const url = URL.createObjectURL(file);
   document.getElementById('audio-player').src = url;
   document.getElementById('audio-preview').classList.add('visible');
+  const nameEl = document.getElementById('audio-name');
+  if (nameEl) nameEl.textContent = file.name;
+  state.audioUploading = true;
+  const prog = document.getElementById('audio-progress');
+  const bar = document.getElementById('audio-bar');
+  prog.classList.add('visible'); bar.style.width = '0%';
+  try {
+    const res = await uploadMedia(file, pct => bar.style.width = pct + '%');
+    document.getElementById('pt-audio-url').value = res.url;
+    toast('Аудио загружено', 'success');
+  } catch(err) {
+    document.getElementById('pt-audio-url').value = '';
+    toast('Ошибка загрузки аудио: ' + err.message, 'error');
+  } finally {
+    state.audioUploading = false;
+    prog.classList.remove('visible'); bar.style.width = '0%';
+  }
 }
 
 function clearAudio() {
@@ -1303,43 +1335,31 @@ function clearCover() {
 
 // ─── SAVE POINT ───
 async function savePoint(e) {
-  e.preventDefault();
+  if (e && e.preventDefault) e.preventDefault();
   const btn = document.getElementById('save-btn');
   btn.disabled = true;
 
+  // ── validation (explicit feedback, no silent fail) ──
+  const title = document.getElementById('pt-title').value.trim();
+  if (!title) { toast('Введите название точки', 'error'); btn.disabled = false; return; }
+  const radiusVal = parseInt(document.getElementById('pt-trigger-radius').value, 10);
+  if (!radiusVal || radiusVal < 1 || radiusVal > 5000) {
+    toast('Радиус срабатывания: число от 1 до 5000 м', 'error'); btn.disabled = false; return;
+  }
+  const lat = parseFloat(document.getElementById('pt-lat').value);
+  const lon = parseFloat(document.getElementById('pt-lon').value);
+  if (isNaN(lat) || isNaN(lon)) { toast('Укажите точку на карте', 'error'); btn.disabled = false; return; }
+  if (state.photoUploading) { toast('Дождитесь загрузки фото', 'error'); btn.disabled = false; return; }
+  if (state.audioUploading) { toast('Дождитесь загрузки аудио', 'error'); btn.disabled = false; return; }
+
   try {
-    // Upload photo if new
-    if (state.pendingPhotoFile) {
-      const prog = document.getElementById('photo-progress');
-      const bar = document.getElementById('photo-bar');
-      prog.classList.add('visible');
-      const res = await uploadMedia(state.pendingPhotoFile, pct => bar.style.width = pct + '%');
-      document.getElementById('pt-image-url').value = res.url;
-      prog.classList.remove('visible'); bar.style.width = '0%';
-      state.pendingPhotoFile = null;
-      toast('Фото загружено', 'success');
-    }
-
-    // Upload audio if new
-    if (state.pendingAudioFile) {
-      const prog = document.getElementById('audio-progress');
-      const bar = document.getElementById('audio-bar');
-      prog.classList.add('visible');
-      const res = await uploadMedia(state.pendingAudioFile, pct => bar.style.width = pct + '%');
-      document.getElementById('pt-audio-url').value = res.url;
-      prog.classList.remove('visible'); bar.style.width = '0%';
-      state.pendingAudioFile = null;
-      toast('Аудио загружено', 'success');
-    }
-
     const payload = {
-      title: document.getElementById('pt-title').value.trim(),
+      title,
       description: document.getElementById('pt-description').value.trim() || null,
-      lat: parseFloat(document.getElementById('pt-lat').value),
-      lon: parseFloat(document.getElementById('pt-lon').value),
+      lat, lon,
       image_url: document.getElementById('pt-image-url').value || null,
       audio_url: document.getElementById('pt-audio-url').value || null,
-      trigger_radius_m: parseInt(document.getElementById('pt-trigger-radius').value, 10) || 50,
+      trigger_radius_m: radiusVal,
     };
 
     const id = document.getElementById('pt-id').value;
@@ -1444,15 +1464,17 @@ function closeModalOnBg(e) {
 }
 
 async function saveRoute(e) {
-  e.preventDefault();
+  if (e && e.preventDefault) e.preventDefault();
   try {
+    const title = document.getElementById('r-title').value.trim();
+    if (!title) { toast('Введите название маршрута', 'error'); return; }
     if (state.pendingCoverFile) {
       const res = await uploadMedia(state.pendingCoverFile, () => {});
       document.getElementById('r-cover-url').value = res.url;
       state.pendingCoverFile = null;
     }
     const payload = {
-      title: document.getElementById('r-title').value.trim(),
+      title,
       description: document.getElementById('r-description').value.trim() || null,
       status: document.getElementById('r-status').value,
       cover_image_url: document.getElementById('r-cover-url').value || null,
