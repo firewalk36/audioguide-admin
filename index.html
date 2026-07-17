@@ -920,7 +920,7 @@ const state = {
   pendingAudioFile: null,
   pendingCoverFile: null,
   settings: {
-    apiUrl: 'https://audioguide-backend-production-3c02.up.railway.app',
+    apiUrl: 'https://firewalk36-audioguide-backend-78c6.twc1.net',
     apiPrefix: '/api/v1',
     mapLat: 55.7558,
     mapLon: 37.6173,
@@ -1561,7 +1561,7 @@ async function deleteRoute() {
 });
 
 // ─── INIT ───
-const _s=localStorage.getItem('ag_settings');if(_s){try{const saved=JSON.parse(_s);Object.keys(saved).forEach(k=>{ if(saved[k]!=='' && saved[k]!=null) state.settings[k]=saved[k]; });}catch(e){}} switchView('map'); initMap();
+const _s=localStorage.getItem('ag_settings');if(_s){try{const saved=JSON.parse(_s);Object.keys(saved).forEach(k=>{ if(saved[k]!=='' && saved[k]!=null) state.settings[k]=saved[k]; });}catch(e){}} if(state.settings.apiUrl && /railway\.app|up\.railway\.app/i.test(state.settings.apiUrl)){state.settings.apiUrl=DEFAULT_API_URL;try{localStorage.setItem('ag_settings',JSON.stringify(state.settings));}catch(e){}} switchView('map'); initMap();
 </script>
 </body>
 </html>
