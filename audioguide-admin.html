@@ -1567,15 +1567,26 @@ async function savePoint(e) {
     };
 
     const id = document.getElementById('pt-id').value;
+    let saved;
     if (id) {
-      await apiFetch('/points/' + id, { method: 'PATCH', body: JSON.stringify(payload) });
+      saved = await apiFetch('/points/' + id, { method: 'PATCH', body: JSON.stringify(payload) });
       toast('Точка обновлена', 'success');
     } else {
-      await apiFetch('/points', { method: 'POST', body: JSON.stringify(payload) });
+      saved = await apiFetch('/points', { method: 'POST', body: JSON.stringify(payload) });
       toast('Точка создана', 'success');
     }
 
     closePanel();
+
+    // Render from the API response so the point shows immediately. A full list
+    // re-fetch right after the write can stall on this backend; relying on it
+    // alone left successfully-created points invisible on the map and in the list.
+    if (saved && saved.id) {
+      const i = state.points.findIndex(p => String(p.id) === String(saved.id));
+      if (i >= 0) state.points[i] = saved; else state.points.push(saved);
+      document.getElementById('points-badge').textContent = state.points.length;
+      renderMapPoints(state.points);
+    }
     loadPoints();
   } catch(err) {
     toast('Ошибка: ' + err.message, 'error');
