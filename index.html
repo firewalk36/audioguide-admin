@@ -399,6 +399,62 @@ img { display: block; max-width: 100%; }
 .audio-preview audio { flex: 1; height: 28px; }
 .audio-preview audio::-webkit-media-controls-panel { background: var(--color-surface-offset); }
 
+/* ─── TOGGLE SWITCH & CHECKBOX ROWS ─── */
+.switch-row {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+}
+.switch-row .label { margin-bottom: 0; }
+.switch { position: relative; display: inline-block; width: 40px; height: 22px; flex-shrink: 0; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch-slider {
+  position: absolute; cursor: pointer; inset: 0;
+  background: var(--color-surface-dynamic);
+  border-radius: var(--radius-full);
+  transition: background var(--transition);
+}
+.switch-slider::before {
+  content: ''; position: absolute; height: 16px; width: 16px; left: 3px; top: 3px;
+  background: #fff; border-radius: 50%; transition: transform var(--transition);
+}
+.switch input:checked + .switch-slider { background: var(--color-primary); }
+.switch input:checked + .switch-slider::before { transform: translateX(18px); }
+
+/* ─── ROUTE POINTS LIST ─── */
+.rp-section { margin-top: var(--space-5); border-top: 1px solid var(--color-divider); padding-top: var(--space-4); }
+.rp-add-row { display: flex; gap: var(--space-2); margin-bottom: var(--space-3); }
+.rp-add-row .select { flex: 1; }
+.rp-list { display: flex; flex-direction: column; gap: var(--space-2); }
+.rp-item {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-offset);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+.rp-item-order {
+  width: 22px; height: 22px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--color-primary-highlight); color: var(--color-primary);
+  border-radius: var(--radius-full); font-size: 11px; font-weight: 700;
+}
+.rp-item-title { flex: 1; font-size: var(--text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rp-item-actions { display: flex; gap: 2px; flex-shrink: 0; }
+.rp-item-actions button {
+  width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-sm); color: var(--color-text-muted);
+  border: 1px solid transparent; transition: background var(--transition), color var(--transition);
+}
+.rp-item-actions button:hover:not(:disabled) { background: var(--color-surface-dynamic); color: var(--color-text); }
+.rp-item-actions button:disabled { opacity: 0.3; cursor: not-allowed; }
+.rp-item-actions button.rp-remove:hover { color: var(--color-error); }
+.rp-item-actions svg { width: 14px; height: 14px; }
+.rp-empty { font-size: var(--text-xs); color: var(--color-text-faint); padding: var(--space-2) 0; }
+.rp-notice {
+  font-size: var(--text-xs); color: var(--color-warning);
+  background: var(--color-warning-highlight); border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3); margin-top: var(--space-2);
+}
+
 /* ─── ROUTES VIEW ─── */
 .routes-view { flex-direction: column; }
 .routes-toolbar {
@@ -666,6 +722,11 @@ img { display: block; max-width: 100%; }
               </div>
 
               <div class="form-group">
+                <label class="label">Краткое описание</label>
+                <textarea class="textarea" id="pt-short-description" placeholder="Короткая подпись для карточки точки…" rows="2"></textarea>
+              </div>
+
+              <div class="form-group">
                 <label class="label">Описание</label>
                 <textarea class="textarea" id="pt-description" placeholder="Историческая справка, описание объекта…" rows="3"></textarea>
               </div>
@@ -683,6 +744,24 @@ img { display: block; max-width: 100%; }
                 <label class="label">Радиус срабатывания (метры) *</label>
                 <input class="input" id="pt-trigger-radius" type="number" min="1" max="5000" step="1" value="50" required oninput="updateNewPointZone()">
                 <div class="form-hint">Зона вокруг точки, при входе в которую запускается аудиогид</div>
+              </div>
+
+              <div class="form-group">
+                <label class="label">Маршрут</label>
+                <select class="select" id="pt-route">
+                  <option value="">— без маршрута —</option>
+                </select>
+                <div class="form-hint">Точку можно привязать к маршруту и упорядочить в его карточке</div>
+              </div>
+
+              <div class="form-group">
+                <label class="label">Тип передвижения</label>
+                <select class="select" id="pt-transport-type">
+                  <option value="walk">Пешком</option>
+                  <option value="bike">Велосипед</option>
+                  <option value="car">Автомобиль</option>
+                  <option value="tram">Трамвай</option>
+                </select>
               </div>
 
               <div class="form-group">
@@ -726,6 +805,28 @@ img { display: block; max-width: 100%; }
                 </div>
               </div>
 
+              <div class="form-group switch-row">
+                <div>
+                  <label class="label" for="pt-is-published">Опубликована</label>
+                  <div class="form-hint">Точка видна на карте в приложении</div>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="pt-is-published" checked>
+                  <span class="switch-slider"></span>
+                </label>
+              </div>
+
+              <div class="form-group switch-row">
+                <div>
+                  <label class="label" for="pt-is-route-start">Начало маршрута</label>
+                  <div class="form-hint">Отметьте, если это стартовая точка маршрута</div>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="pt-is-route-start">
+                  <span class="switch-slider"></span>
+                </label>
+              </div>
+
               <input type="hidden" id="pt-id">
               <input type="hidden" id="pt-image-url">
               <input type="hidden" id="pt-audio-url">
@@ -757,6 +858,7 @@ img { display: block; max-width: 100%; }
             <option value="">Все статусы</option>
             <option value="published">Опубликован</option>
             <option value="draft">Черновик</option>
+            <option value="archived">В архиве</option>
           </select>
         </div>
         <div class="routes-grid" id="routes-grid">
@@ -865,11 +967,31 @@ img { display: block; max-width: 100%; }
           <textarea class="textarea" id="r-description" placeholder="Краткое описание маршрута для пользователей…" rows="3"></textarea>
         </div>
         <div class="form-group">
+          <label class="label">Тип маршрута</label>
+          <select class="select" id="r-route-type">
+            <option value="walking">Пеший</option>
+            <option value="cycling">Велосипедный</option>
+            <option value="driving">Автомобильный</option>
+            <option value="public_transport">Общественный транспорт</option>
+          </select>
+        </div>
+        <div class="form-group">
           <label class="label">Статус публикации</label>
           <select class="select" id="r-status">
             <option value="draft">Черновик</option>
             <option value="published">Опубликован</option>
+            <option value="archived">В архиве</option>
           </select>
+        </div>
+        <div class="coords-row">
+          <div class="form-group">
+            <label class="label">Длительность (мин)</label>
+            <input class="input" id="r-duration" type="number" min="0" step="1" placeholder="60">
+          </div>
+          <div class="form-group">
+            <label class="label">Расстояние (м)</label>
+            <input class="input" id="r-distance" type="number" min="0" step="1" placeholder="2500">
+          </div>
         </div>
         <div class="form-group">
           <label class="label">Обложка маршрута</label>
@@ -892,6 +1014,20 @@ img { display: block; max-width: 100%; }
         <input type="hidden" id="r-id">
         <input type="hidden" id="r-cover-url">
       </form>
+
+      <div class="rp-section" id="rp-section" style="display:none">
+        <label class="label">Точки маршрута (порядок прохождения)</label>
+        <div class="rp-add-row">
+          <select class="select" id="rp-add-select">
+            <option value="">— выберите точку —</option>
+          </select>
+          <button type="button" class="btn btn-ghost" onclick="addPointToRoute()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Добавить
+          </button>
+        </div>
+        <div class="rp-list" id="rp-list"></div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-danger" id="r-delete-btn" style="display:none" onclick="deleteRoute()">Удалить</button>
@@ -912,6 +1048,8 @@ img { display: block; max-width: 100%; }
 const state = {
   routes: [],
   points: [],
+  routePoints: [],
+  currentRouteId: null,
   activePointId: null,
   newMarker: null,
   newZone: null,
@@ -1048,6 +1186,25 @@ function toast(msg, type = 'info') {
   setTimeout(() => el.remove(), 4000);
 }
 
+function escapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// ─── QUICK PUBLISH TOGGLE ───
+async function togglePublish(id) {
+  const pt = state.points.find(p => String(p.id) === String(id));
+  if (!pt) return;
+  const next = !(pt.is_published !== false);
+  try {
+    await apiFetch('/points/' + id, { method: 'PATCH', body: JSON.stringify({ is_published: next }) });
+    pt.is_published = next;
+    toast(next ? 'Точка опубликована' : 'Точка снята с публикации', 'success');
+    renderMapPoints(state.points);
+  } catch(e) { toast('Ошибка: ' + e.message, 'error'); }
+}
+
 // ─── VIEWS ───
 function switchView(v) {
   document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
@@ -1124,12 +1281,23 @@ function renderMapPoints(points) {
     ymap.geoObjects.add(zone);
     state.pointZones.push(zone);
 
+    const published = pt.is_published !== false;
+    const statusBadge = published
+      ? '<span style="color:#437a22;font-weight:600">● Опубликована</span>'
+      : '<span style="color:#964219;font-weight:600">● Черновик</span>';
+    const toggleLabel = published ? 'Снять с публикации' : 'Опубликовать';
+    const balloon =
+      `<strong>${escapeHtml(pt.title)}</strong>` +
+      `${pt.description ? '<br>' + escapeHtml(pt.description.slice(0,80)) : ''}` +
+      `<br><span style="color:#888">Зона: ${radius} м</span>` +
+      `<br>${statusBadge}` +
+      `<br><button type="button" onclick="togglePublish('${pt.id}')" style="margin-top:6px;cursor:pointer;border:1px solid #ccc;background:#fff;border-radius:6px;padding:3px 8px;font-size:12px">${toggleLabel}</button>`;
     const pm = new ymaps.Placemark([pt.lat, pt.lon], {
-      balloonContent: `<strong>${pt.title}</strong>${pt.description ? '<br>' + pt.description.slice(0,80) : ''}<br><span style="color:#888">Зона: ${radius} м</span>`,
-      hintContent: pt.title,
+      balloonContent: balloon,
+      hintContent: pt.title + (published ? '' : ' (черновик)'),
     }, {
       preset: pt.audio_url ? 'islands#darkGreenAudioIcon' : 'islands#darkGreenDotIcon',
-      iconColor: '#01696f',
+      iconColor: published ? '#01696f' : '#964219',
     });
     pm._type = 'point';
     pm._pointId = pt.id;
@@ -1212,10 +1380,15 @@ function openNewPointPanel(lat, lon) {
 
   document.getElementById('pt-id').value = '';
   document.getElementById('pt-title').value = '';
+  document.getElementById('pt-short-description').value = '';
   document.getElementById('pt-description').value = '';
   document.getElementById('pt-lat').value = lat.toFixed(6);
   document.getElementById('pt-lon').value = lon.toFixed(6);
   document.getElementById('pt-trigger-radius').value = radius;
+  document.getElementById('pt-route').value = '';
+  document.getElementById('pt-transport-type').value = 'walk';
+  document.getElementById('pt-is-published').checked = true;
+  document.getElementById('pt-is-route-start').checked = false;
   document.getElementById('pt-image-url').value = '';
   document.getElementById('pt-audio-url').value = '';
   clearPhoto(); clearAudio();
@@ -1233,10 +1406,15 @@ function openEditPointPanel(pt) {
 
   document.getElementById('pt-id').value = pt.id;
   document.getElementById('pt-title').value = pt.title;
+  document.getElementById('pt-short-description').value = pt.short_description || '';
   document.getElementById('pt-description').value = pt.description || '';
   document.getElementById('pt-lat').value = pt.lat;
   document.getElementById('pt-lon').value = pt.lon;
   document.getElementById('pt-trigger-radius').value = pt.trigger_radius_m ?? 50;
+  document.getElementById('pt-route').value = pt.route_id || '';
+  document.getElementById('pt-transport-type').value = pt.transport_type || 'walk';
+  document.getElementById('pt-is-published').checked = pt.is_published !== false;
+  document.getElementById('pt-is-route-start').checked = !!pt.is_route_start;
   clearPhoto(); clearAudio();
   document.getElementById('pt-image-url').value = pt.image_url || '';
   document.getElementById('pt-audio-url').value = pt.audio_url || '';
@@ -1376,11 +1554,16 @@ async function savePoint(e) {
   try {
     const payload = {
       title,
+      short_description: document.getElementById('pt-short-description').value.trim() || null,
       description: document.getElementById('pt-description').value.trim() || null,
       lat, lon,
       image_url: document.getElementById('pt-image-url').value || null,
       audio_url: document.getElementById('pt-audio-url').value || null,
       trigger_radius_m: radiusVal,
+      route_id: document.getElementById('pt-route').value || null,
+      transport_type: document.getElementById('pt-transport-type').value || null,
+      is_published: document.getElementById('pt-is-published').checked,
+      is_route_start: document.getElementById('pt-is-route-start').checked,
     };
 
     const id = document.getElementById('pt-id').value;
@@ -1464,7 +1647,10 @@ function openRouteModal(id) {
   document.getElementById('r-id').value = r ? r.id : '';
   document.getElementById('r-title').value = r ? r.title : '';
   document.getElementById('r-description').value = r ? (r.description || '') : '';
+  document.getElementById('r-route-type').value = r ? (r.route_type || 'walking') : 'walking';
   document.getElementById('r-status').value = r ? (r.status || 'draft') : 'draft';
+  document.getElementById('r-duration').value = r && r.duration_minutes != null ? r.duration_minutes : '';
+  document.getElementById('r-distance').value = r && r.distance_meters != null ? r.distance_meters : '';
   document.getElementById('r-cover-url').value = r ? (r.cover_image_url || '') : '';
   document.getElementById('r-delete-btn').style.display = r ? '' : 'none';
   clearCover();
@@ -1472,6 +1658,15 @@ function openRouteModal(id) {
     document.getElementById('cover-img').src = r.cover_image_url;
     document.getElementById('cover-name').textContent = 'Загруженная обложка';
     document.getElementById('cover-preview').classList.add('visible');
+  }
+  // Route points management only for existing routes
+  const rpSection = document.getElementById('rp-section');
+  if (r) {
+    rpSection.style.display = '';
+    loadRoutePoints(r.id);
+  } else {
+    rpSection.style.display = 'none';
+    document.getElementById('rp-list').innerHTML = '';
   }
   modal.classList.add('open');
 }
@@ -1494,10 +1689,15 @@ async function saveRoute(e) {
       document.getElementById('r-cover-url').value = res.url;
       state.pendingCoverFile = null;
     }
+    const durationVal = document.getElementById('r-duration').value;
+    const distanceVal = document.getElementById('r-distance').value;
     const payload = {
       title,
       description: document.getElementById('r-description').value.trim() || null,
+      route_type: document.getElementById('r-route-type').value,
       status: document.getElementById('r-status').value,
+      duration_minutes: durationVal === '' ? null : parseInt(durationVal, 10),
+      distance_meters: distanceVal === '' ? null : parseInt(distanceVal, 10),
       cover_image_url: document.getElementById('r-cover-url').value || null,
     };
     const id = document.getElementById('r-id').value;
@@ -1522,6 +1722,114 @@ async function deleteRoute() {
     closeRouteModal();
     loadRoutes();
   } catch(e) { toast('Ошибка: ' + e.message, 'error'); }
+}
+
+// ─── ROUTE POINTS ORDERING ───
+async function loadRoutePoints(routeId) {
+  state.currentRouteId = routeId;
+  state.routePoints = [];
+  const list = document.getElementById('rp-list');
+  list.innerHTML = '<div class="rp-empty">Загрузка…</div>';
+  try {
+    const pts = await apiFetch('/routes/' + routeId + '/points');
+    state.routePoints = Array.isArray(pts) ? pts.slice() : [];
+    // keep stable order by order_index when present
+    state.routePoints.sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
+    renderRoutePoints();
+  } catch(e) {
+    // Endpoint may not exist yet on backend — degrade gracefully, don't break the modal
+    list.innerHTML =
+      '<div class="rp-empty">Нет добавленных точек.</div>' +
+      '<div class="rp-notice">Управление порядком требует backend-эндпоинта ' +
+      '<code>/routes/{id}/points</code> (см. audioguide-backend-route-points-endpoint.md). ' +
+      'Ошибка запроса: ' + escapeHtml(e.message) + '</div>';
+    updateRoutePointAddSelect();
+  }
+}
+
+function renderRoutePoints() {
+  const list = document.getElementById('rp-list');
+  list.innerHTML = '';
+  if (!state.routePoints.length) {
+    list.innerHTML = '<div class="rp-empty">Точки ещё не добавлены в маршрут.</div>';
+  } else {
+    state.routePoints.forEach((pt, i) => {
+      const item = document.createElement('div');
+      item.className = 'rp-item';
+      item.innerHTML =
+        '<span class="rp-item-order">' + (i + 1) + '</span>' +
+        '<span class="rp-item-title">' + escapeHtml(pt.title || ('Точка #' + pt.id)) + '</span>' +
+        '<span class="rp-item-actions">' +
+          '<button type="button" title="Вверх" onclick="moveRoutePoint(' + i + ',-1)"' + (i === 0 ? ' disabled' : '') + '>' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg></button>' +
+          '<button type="button" title="Вниз" onclick="moveRoutePoint(' + i + ',1)"' + (i === state.routePoints.length - 1 ? ' disabled' : '') + '>' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg></button>' +
+          '<button type="button" class="rp-remove" title="Убрать" onclick="removePointFromRoute(\'' + pt.id + '\')">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
+        '</span>';
+      list.appendChild(item);
+    });
+  }
+  updateRoutePointAddSelect();
+}
+
+function updateRoutePointAddSelect() {
+  const sel = document.getElementById('rp-add-select');
+  const inRoute = new Set(state.routePoints.map(p => String(p.id)));
+  sel.innerHTML = '<option value="">— выберите точку —</option>';
+  state.points
+    .filter(p => !inRoute.has(String(p.id)))
+    .forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.title;
+      sel.appendChild(opt);
+    });
+}
+
+async function addPointToRoute() {
+  const sel = document.getElementById('rp-add-select');
+  const pointId = sel.value;
+  if (!pointId) { toast('Выберите точку', 'error'); return; }
+  if (!state.currentRouteId) return;
+  const orderIndex = state.routePoints.length;
+  try {
+    await apiFetch('/routes/' + state.currentRouteId + '/points', {
+      method: 'POST',
+      body: JSON.stringify({ point_id: pointId, order_index: orderIndex }),
+    });
+    toast('Точка добавлена в маршрут', 'success');
+    loadRoutePoints(state.currentRouteId);
+  } catch(e) { toast('Ошибка: ' + e.message, 'error'); }
+}
+
+async function removePointFromRoute(pointId) {
+  if (!state.currentRouteId) return;
+  try {
+    await apiFetch('/routes/' + state.currentRouteId + '/points/' + pointId, { method: 'DELETE' });
+    toast('Точка убрана из маршрута', 'success');
+    loadRoutePoints(state.currentRouteId);
+  } catch(e) { toast('Ошибка: ' + e.message, 'error'); }
+}
+
+async function moveRoutePoint(index, dir) {
+  const target = index + dir;
+  if (target < 0 || target >= state.routePoints.length) return;
+  const arr = state.routePoints;
+  [arr[index], arr[target]] = [arr[target], arr[index]];
+  renderRoutePoints();
+  await persistRouteOrder();
+}
+
+async function persistRouteOrder() {
+  if (!state.currentRouteId) return;
+  const pointIds = state.routePoints.map(p => p.id);
+  try {
+    await apiFetch('/routes/' + state.currentRouteId + '/points/reorder', {
+      method: 'PATCH',
+      body: JSON.stringify({ point_ids: pointIds }),
+    });
+  } catch(e) { toast('Порядок не сохранён: ' + e.message, 'error'); }
 }
 
 // ─── THEME ───
