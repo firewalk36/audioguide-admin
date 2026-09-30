@@ -37,7 +37,7 @@ function loadYandexMaps() {
   return scriptPromise;
 }
 
-const PIN_COLORS = { draft: "#964219", published: "#01696f" };
+const PIN_COLORS = { draft: "#8a9197", published: "#0051ff" };
 
 export class AgMap {
   /**
@@ -121,7 +121,7 @@ export class AgMap {
    */
   showDraftMarker(lat, lon) {
     this.clearDraftMarker();
-    this.draftMarker = new this.ymaps.Placemark([lat, lon], {}, { preset: "islands#circleDotIcon", iconColor: "#7a7974" });
+    this.draftMarker = new this.ymaps.Placemark([lat, lon], {}, { preset: "islands#circleDotIcon", iconColor: "#fe634e" });
     this.map.geoObjects.add(this.draftMarker);
   }
 
@@ -142,7 +142,7 @@ export class AgMap {
     this.triggerCircle = new this.ymaps.Circle(
       [[lat, lon], radiusM],
       {},
-      { fillColor: "#01696f33", strokeColor: "#01696f", strokeWidth: 2 }
+      { fillColor: "#0051ff22", strokeColor: "#0051ff", strokeWidth: 2 }
     );
     this.map.geoObjects.add(this.triggerCircle);
   }
@@ -161,7 +161,7 @@ export class AgMap {
     this.routeLine = new this.ymaps.Polyline(
       coords,
       {},
-      { strokeColor: "#01696f", strokeWidth: 3, strokeOpacity: 0.85 }
+      { strokeColor: "#fe634e", strokeWidth: 4, strokeOpacity: 0.95 }
     );
     this.map.geoObjects.add(this.routeLine);
   }

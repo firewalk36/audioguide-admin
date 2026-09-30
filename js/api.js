@@ -19,6 +19,74 @@ export class ApiError extends Error {
 }
 
 /**
+ * Build the normalized ApiError for a non-2xx response, shared between the
+ * fetch-based `request()` below and the XHR-based upload in `media.js`
+ * (which cannot go through `request()` since it needs upload progress
+ * events and a `multipart/form-data` body).
+ *
+ * @param {number} status HTTP status code.
+ * @param {string} detail The backend's `{"detail": "..."}` string, or "".
+ * @param {string} path Path relative to the API base (as passed to `request`).
+ * @param {string} [statusText] `XMLHttpRequest.statusText` / `Response.statusText`.
+ * @returns {ApiError}
+ */
+export function errorFromStatus(status, detail, path, statusText) {
+  if (status === 401) {
+    if (path === "/auth/login") {
+      return new ApiError(401, "Неверный email или пароль. После 5 неудачных попыток вход блокируется на 15 минут.");
+    }
+    window.dispatchEvent(new CustomEvent("auth:required"));
+    return new ApiError(401, "Требуется авторизация");
+  }
+
+  if (status === 429) {
+    return new ApiError(429, "Слишком много неудачных попыток. Попробуйте через 15 минут.");
+  }
+
+  if (status === 403) {
+    return new ApiError(403, "Недостаточно прав");
+  }
+
+  if (status === 404) {
+    return new ApiError(404, "Не найдено");
+  }
+
+  if (status === 409) {
+    const knownDetails = {
+      "Email already registered": "Этот email уже зарегистрирован",
+      "Media is in use": "Файл используется в точке или маршруте",
+    };
+    const message = knownDetails[detail] || `Конфликт: ${detail || "конфликт данных"}`;
+    return new ApiError(409, message);
+  }
+
+  if (status === 422) {
+    return new ApiError(422, `Проверьте данные: ${detail || "некорректные данные"}`);
+  }
+
+  // 413 (too large) and 507 (out of disk) carry a ready-to-show Russian
+  // message from the backend (see the media upload contract) — show it as-is.
+  if (status === 413) {
+    return new ApiError(413, detail || "Файл слишком большой");
+  }
+
+  if (status === 507) {
+    return new ApiError(507, detail || "Недостаточно места на сервере");
+  }
+
+  if (status === 503) {
+    return new ApiError(503, detail || "Сервис временно недоступен");
+  }
+
+  if (status >= 500) {
+    return new ApiError(status, "Ошибка сервера. Попробуйте позже.");
+  }
+
+  const message = detail || statusText || `Ошибка запроса (${status})`;
+  return new ApiError(status, message);
+}
+
+/**
  * Perform an API request against `CONFIG.apiBase + path`.
  * Always sends `X-Requested-With: fetch` and `credentials: "same-origin"`
  * as required by the backend's CSRF defence and session cookie.
@@ -63,48 +131,5 @@ export async function request(method, path, body) {
   if (res.ok) return data;
 
   const detail = data && typeof data.detail === "string" && data.detail ? data.detail : "";
-
-  if (res.status === 401) {
-    if (path === "/auth/login") {
-      throw new ApiError(401, "Неверный email или пароль. После 5 неудачных попыток вход блокируется на 15 минут.");
-    }
-    window.dispatchEvent(new CustomEvent("auth:required"));
-    throw new ApiError(401, "Требуется авторизация");
-  }
-
-  if (res.status === 429) {
-    throw new ApiError(429, "Слишком много неудачных попыток. Попробуйте через 15 минут.");
-  }
-
-  if (res.status === 403) {
-    throw new ApiError(403, "Недостаточно прав");
-  }
-
-  if (res.status === 404) {
-    throw new ApiError(404, "Не найдено");
-  }
-
-  if (res.status === 409) {
-    const knownDetails = {
-      "Email already registered": "Этот email уже зарегистрирован",
-      "Media is in use": "Файл используется в точке или маршруте",
-    };
-    const message = knownDetails[detail] || `Конфликт: ${detail || "конфликт данных"}`;
-    throw new ApiError(409, message);
-  }
-
-  if (res.status === 422) {
-    throw new ApiError(422, `Проверьте данные: ${detail || "некорректные данные"}`);
-  }
-
-  if (res.status === 503) {
-    throw new ApiError(503, detail || "Сервис временно недоступен");
-  }
-
-  if (res.status >= 500) {
-    throw new ApiError(res.status, "Ошибка сервера. Попробуйте позже.");
-  }
-
-  const message = detail || res.statusText || `Ошибка запроса (${res.status})`;
-  throw new ApiError(res.status, message);
+  throw errorFromStatus(res.status, detail, path, res.statusText);
 }

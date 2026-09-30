@@ -112,8 +112,10 @@ async function openEditor(point, coords) {
   d.fDesc.value = point ? point.description || "" : "";
   const lat = point ? point.lat : coords ? coords.lat : "";
   const lon = point ? point.lon : coords ? coords.lon : "";
-  d.fLat.value = String(lat);
-  d.fLon.value = String(lon);
+  // Map clicks yield full-precision floats; the inputs use step=0.000001, so an
+  // unrounded value fails native validation and the form silently won't submit.
+  d.fLat.value = typeof lat === "number" ? lat.toFixed(6) : String(lat);
+  d.fLon.value = typeof lon === "number" ? lon.toFixed(6) : String(lon);
   d.fRadius.value = String(point ? point.trigger_radius_m : 50);
   d.fPublished.checked = point ? point.status === "published" : false;
 

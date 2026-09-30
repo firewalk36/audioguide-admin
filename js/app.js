@@ -18,9 +18,10 @@ let mapReady = false;
 // ─── theme ───
 
 function applyStoredTheme() {
-  let theme = "dark";
+  // Light is the primary (brand) theme; dark stays available via the toggle.
+  let theme = "light";
   try {
-    theme = localStorage.getItem(THEME_KEY) || "dark";
+    theme = localStorage.getItem(THEME_KEY) || "light";
   } catch (err) {
     /* localStorage unavailable (private mode) — fall back to default */
   }
@@ -131,6 +132,11 @@ function wireNav() {
   themeBtn && themeBtn.addEventListener("click", toggleTheme);
   const newRouteBtn = document.getElementById("new-route-btn");
   newRouteBtn && newRouteBtn.addEventListener("click", () => routes.openRouteModal(null));
+  // Empty states offer the next step instead of a dead end.
+  const routesEmptyNew = document.getElementById("routes-empty-new");
+  routesEmptyNew && routesEmptyNew.addEventListener("click", () => routes.openRouteModal(null));
+  const pointsEmptyMap = document.getElementById("points-empty-map");
+  pointsEmptyMap && pointsEmptyMap.addEventListener("click", () => guardedSwitch("map"));
 }
 
 // ─── auth-driven visibility ───

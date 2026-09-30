@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """In-memory mock of the AudioGuide admin API, for local frontend verification.
 Serves the repo's static files AND implements the /api/v1 contract (auth,
-points, routes, users, media + a fake Cloudinary upload endpoint) well enough
-to exercise the admin panel end to end.
+points, routes, users, local media upload + `/media/...` file serving) well
+enough to exercise the admin panel end to end.
 Usage: python3 dev/mock_server.py [port]   (default 8766). Stdlib only.
 """
 import hashlib, json, os, re, secrets, sys, time, traceback, uuid
@@ -14,7 +14,14 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SESSION_COOKIE = "ag_session"
 
 USERS, SESSIONS, POINTS, ROUTES, MEDIA = {}, {}, {}, {}, {}  # token_hash -> user_id
-PENDING_UPLOADS = {}  # full_public_id -> {format, bytes, secure_url, duration} (not yet confirmed)
+MEDIA_FILES = {}  # public_id ("images/<hex>.jpg" | "audio/<hex>.<ext>") -> raw bytes
+
+IMAGE_EXTS = ("jpg", "jpeg", "png", "webp")
+AUDIO_EXTS = ("mp3", "m4a", "aac", "ogg", "wav")
+MEDIA_CONTENT_TYPES = {
+    "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp",
+    "mp3": "audio/mpeg", "m4a": "audio/mp4", "aac": "audio/aac", "ogg": "audio/ogg", "wav": "audio/wav",
+}
 
 POINT_FIELDS = ("title", "short_description", "description", "lat", "lon",
                 "trigger_radius_m", "status", "image_media_id", "audio_media_id")
@@ -154,8 +161,8 @@ class Handler(BaseHTTPRequestHandler):
             if path.startswith("/api/v1/"):
                 self._require_csrf()
                 self._route_api(method, path[len("/api/v1"):], query)
-            elif path == "/mock-cloudinary/upload" and method == "POST":
-                self._handle_cloudinary_upload()
+            elif path.startswith("/media/") and method == "GET":
+                self._serve_media(path)
             else:
                 self._serve_static(path)
         except ApiError as e:
@@ -174,6 +181,19 @@ class Handler(BaseHTTPRequestHandler):
             data = f.read()
         self.send_response(200)
         self.send_header("Content-Type", ctype + "; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _serve_media(self, path):
+        public_id = path[len("/media/"):]
+        data = MEDIA_FILES.get(public_id)
+        if data is None:
+            return self._send_json(404, {"detail": "Not found"})
+        ext = public_id.rsplit(".", 1)[-1].lower() if "." in public_id else ""
+        ctype = MEDIA_CONTENT_TYPES.get(ext, "application/octet-stream")
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
@@ -198,8 +218,7 @@ class Handler(BaseHTTPRequestHandler):
         ("GET", r"^/manage/users$", "_list_users"),
         ("POST", r"^/manage/users$", "_create_user"),
         ("PATCH", r"^/manage/users/([^/]+)$", "_patch_user"),
-        ("POST", r"^/manage/media/sign$", "_media_sign"),
-        ("POST", r"^/manage/media/confirm$", "_media_confirm"),
+        ("POST", r"^/manage/media$", "_media_upload"),
         ("DELETE", r"^/manage/media/([^/]+)$", "_media_delete"),
     ]
 
@@ -401,25 +420,11 @@ class Handler(BaseHTTPRequestHandler):
 
     # ── media ──
 
-    def _media_sign(self):
-        self._current_user()
-        kind = self._read_json().get("kind")
-        if kind not in ("image", "audio"):
-            raise ApiError(422, "kind: invalid")
-        public_id = uuid.uuid4().hex
-        folder = "audioguide/images" if kind == "image" else "audioguide/audio"
-        allowed = "jpg,jpeg,png,webp" if kind == "image" else "mp3,m4a,aac,ogg,wav"
-        self._send_json(200, {
-            "upload_url": "/mock-cloudinary/upload", "api_key": "mock-key", "timestamp": int(time.time()),
-            "signature": hashlib.sha256(("%s%s" % (public_id, folder)).encode()).hexdigest()[:40],
-            "folder": folder, "public_id": public_id, "resource_type": "image" if kind == "image" else "video",
-            "allowed_formats": allowed, "max_bytes": 5 * 1024 * 1024 if kind == "image" else 30 * 1024 * 1024,
-        })
-
-    def _handle_cloudinary_upload(self):
+    def _media_upload(self):
+        user = self._current_user()
         m = re.search(r"boundary=(.+)", self.headers.get("Content-Type", ""))
         if not m:
-            raise ApiError(400, "Bad multipart body")
+            raise ApiError(422, "Файл повреждён или не является изображением")
         boundary, fields, filename = m.group(1).strip('"').encode(), {}, "upload.bin"
         for part in self._read_raw().split(b"--" + boundary):
             part = part.strip(b"\r\n")
@@ -438,31 +443,29 @@ class Handler(BaseHTTPRequestHandler):
                 fields["_file_bytes"] = data
             else:
                 fields[field] = data.decode(errors="ignore")
-        file_bytes = fields.get("_file_bytes", b"")
-        fmt = (filename.rsplit(".", 1)[-1] if "." in filename else "bin").lower()
-        public_id, folder = fields.get("public_id", uuid.uuid4().hex), fields.get("folder", "audioguide/misc")
-        full_public_id, secure_url = "%s/%s" % (folder, public_id), "/mock-cloudinary/files/%s.%s" % (public_id, fmt)
-        duration = 12.3 if folder.endswith("audio") else None
-        PENDING_UPLOADS[full_public_id] = {"format": fmt, "bytes": len(file_bytes),
-                                             "secure_url": secure_url, "duration": duration}
-        self._send_json(200, {"secure_url": secure_url, "format": fmt, "bytes": len(file_bytes), "duration": duration})
 
-    def _media_confirm(self):
-        user = self._current_user()
-        body = self._read_json()
-        kind, public_id = body.get("kind"), body.get("public_id")
-        folder = "audioguide/images" if kind == "image" else "audioguide/audio"
-        full_public_id = "%s/%s" % (folder, public_id)
-        existing = next((m for m in MEDIA.values() if m.get("public_id") == full_public_id), None)
-        if existing:
-            return self._send_json(200, media_ref(existing["id"]))
-        pending = PENDING_UPLOADS.pop(full_public_id, None)
-        if not pending:
-            raise ApiError(404, "Upload not found")
+        kind = fields.get("kind")
+        if kind not in ("image", "audio"):
+            raise ApiError(422, "Неподдерживаемый формат файла")
+
+        file_bytes = fields.get("_file_bytes", b"")
+        ext = (filename.rsplit(".", 1)[-1] if "." in filename else "").lower()
+        allowed = IMAGE_EXTS if kind == "image" else AUDIO_EXTS
+        if ext not in allowed:
+            detail = "Файл повреждён или не является изображения" if kind == "image" else "Файл повреждён или не является аудио"
+            raise ApiError(422, "Неподдерживаемый формат файла" if not ext else detail)
+
+        # Real backend always re-encodes images to JPEG; keep the mock's stored
+        # extension in sync with that so `<MEDIA_ROOT>/images/<hex>.jpg` holds.
+        fmt = "jpg" if kind == "image" else ext
+        subdir = "images" if kind == "image" else "audio"
+        public_id = "%s/%s.%s" % (subdir, uuid.uuid4().hex, fmt)
+        MEDIA_FILES[public_id] = file_bytes
+
         mid = str(uuid.uuid4())
-        MEDIA[mid] = {"id": mid, "public_id": full_public_id, "resource_type": kind, "format": pending["format"],
-                       "bytes": pending["bytes"], "duration_seconds": pending["duration"], "url": pending["secure_url"],
-                       "uploaded_by_id": user["id"], "created_at": now_iso()}
+        MEDIA[mid] = {"id": mid, "public_id": public_id, "resource_type": kind, "format": fmt,
+                       "bytes": len(file_bytes), "duration_seconds": 12.3 if kind == "audio" else None,
+                       "url": "/media/%s" % public_id, "uploaded_by_id": user["id"], "created_at": now_iso()}
         self._send_json(201, media_ref(mid))
 
     def _media_delete(self, mid):
@@ -473,7 +476,9 @@ class Handler(BaseHTTPRequestHandler):
         used = used or any(r.get("cover_media_id") == mid or r.get("intro_audio_media_id") == mid for r in ROUTES.values())
         if used:
             raise ApiError(409, "Media is in use")
+        public_id = MEDIA[mid].get("public_id")
         del MEDIA[mid]
+        MEDIA_FILES.pop(public_id, None)
         self._send_no_content()
 
 
